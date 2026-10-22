@@ -1,0 +1,10 @@
+aiogram==3.31.0
+fastapi
+uvicorn
+sqlalchemy
+asyncpg
+redis
+pydantic
+pydantic-settings
+greenlet
+aiosqlite
