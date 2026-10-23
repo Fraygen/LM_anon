@@ -46,7 +46,7 @@ async def cmd_start(message: Message):
     await r.delete(f"current_post:{user_id}")
     
     await message.answer(
-        "👋 <b>Анонимные сообщения школы</b>\n\n"
+        "👋 <b>Анонимные сообщения LM</b>\n\n"
         "Здесь можно читать анонимные сообщения за последние 24 часа и отправлять свои.\n\n"
         "Выбери действие:",
         reply_markup=kb.start_inline,
@@ -152,7 +152,6 @@ async def callback_new(callback: CallbackQuery):
     await callback.answer()
     await do_start_writing(callback, callback.from_user.id)
 
-# Обработка лайков и дизлайков
 @router.callback_query(F.data.startswith("react:"))
 async def handle_reaction_callback(callback: CallbackQuery):
     parts = callback.data.split(":")
@@ -160,7 +159,7 @@ async def handle_reaction_callback(callback: CallbackQuery):
         await callback.answer("Ошибка данных.", show_alert=True)
         return
     
-    action = parts[1] # 'like' или 'dislike'
+    action = parts[1]
     try:
         announcement_id = int(parts[2])
     except ValueError:
@@ -243,9 +242,7 @@ async def admin_delete_cancel(callback: CallbackQuery):
 
     await callback.answer("Удаление отменено.")
     is_admin = callback.from_user.id in config.admin_id_list
-    # Восстанавливаем кнопки реакции и удаления
     parts = callback.message.text.split("🕒") if callback.message.text else []
-    # Быстрый способ вернуть стандартную инлайн-клавиатуру:
     await callback.message.edit_reply_markup(
         reply_markup=kb.announcement_inline_keyboard(announcement_id, 0, 0, is_admin)
     )
