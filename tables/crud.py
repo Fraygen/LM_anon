@@ -1,15 +1,28 @@
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, func, desc, delete
-from tables.database import AsyncSessionLocal, Announcement, Reaction
+from tables.database import AsyncSessionLocal, Announcement, Reaction, User
 
-async def add_announcement(author_id: int, author_username: str | None, author_fullname: str | None, text: str):
+async def save_user_to_db(user_id: int):
     async with AsyncSessionLocal() as session:
-        clean_text = text.strip()
+        existing = await session.get(User, user_id)
+        if not existing:
+            session.add(User(user_id=user_id))
+            await session.commit()
+
+async def get_all_users():
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(User.user_id))
+        return result.scalars().all()
+
+async def add_announcement(author_id: int, author_username: str | None, author_fullname: str | None, text: str | None, photo_file_id: str | None):
+    async with AsyncSessionLocal() as session:
+        clean_text = text.strip() if text else ""
         new_announcement = Announcement(
             author_id=author_id,
             author_username=author_username,
             author_fullname=author_fullname,
             text=clean_text,
+            photo_file_id=photo_file_id,
             status="published"
         )
         session.add(new_announcement)
@@ -17,10 +30,29 @@ async def add_announcement(author_id: int, author_username: str | None, author_f
         await session.refresh(new_announcement)
         return new_announcement
 
+async def get_unread_count_since(last_seen_id: int) -> int:
+    async with AsyncSessionLocal() as session:
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=3)
+        stmt = select(func.count(Announcement.id)).where(
+            Announcement.status == 'published',
+            Announcement.created_at >= cutoff_time,
+            Announcement.id > last_seen_id
+        )
+        return (await session.execute(stmt)).scalar_one()
+
+async def increment_view(announcement_id: int):
+    async with AsyncSessionLocal() as session:
+        announcement = await session.get(Announcement, announcement_id)
+        if announcement:
+            announcement.views_count += 1
+            await session.commit()
+            await session.refresh(announcement)
+            return announcement.views_count
+        return 0
+
 async def delete_announcement(announcement_id: int) -> bool:
     async with AsyncSessionLocal() as session:
         try:
-            # Удаляем и связанные реакции
             await session.execute(delete(Reaction).where(Reaction.announcement_id == announcement_id))
             stmt = delete(Announcement).where(Announcement.id == announcement_id)
             result = await session.execute(stmt)
@@ -42,14 +74,12 @@ async def handle_reaction(announcement_id: int, user_id: int, value: str):
 
         if existing:
             if existing.value == value:
-                # Отменяем голос при повторном нажатии
                 if value == 'like':
                     announcement.likes_count = max(0, announcement.likes_count - 1)
                 else:
                     announcement.dislikes_count = max(0, announcement.dislikes_count - 1)
                 await session.delete(existing)
             else:
-                # Меняем голос с лайка на дизлайк или наоборот
                 if value == 'like':
                     announcement.likes_count += 1
                     announcement.dislikes_count = max(0, announcement.dislikes_count - 1)
@@ -58,7 +88,6 @@ async def handle_reaction(announcement_id: int, user_id: int, value: str):
                     announcement.likes_count = max(0, announcement.likes_count - 1)
                 existing.value = value
         else:
-            # Новый голос
             new_react = Reaction(announcement_id=announcement_id, user_id=user_id, value=value)
             session.add(new_react)
             if value == 'like':
@@ -72,7 +101,7 @@ async def handle_reaction(announcement_id: int, user_id: int, value: str):
 
 async def get_feed_page(announcement_id: int | None = None):
     async with AsyncSessionLocal() as session:
-        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=24)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=3)
 
         if announcement_id is None:
             stmt = (
