@@ -57,11 +57,8 @@ def get_relative_time_str(created_at: datetime) -> str:
 async def format_announcement(page, viewer_id: int):
     item = page["item"]
     
-    view_key = f"view:{viewer_id}:{item.id}"
-    if not await r.get(view_key):
-        await r.set(view_key, "1", ex=259200)
-        new_views = await increment_view(item.id)
-        item.views_count = new_views
+    new_views = await increment_view(item.id)
+    item.views_count = new_views
 
     time_str = get_relative_time_str(item.created_at)
 

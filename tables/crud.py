@@ -49,6 +49,7 @@ async def increment_view(announcement_id: int):
             await session.refresh(announcement)
             return announcement.views_count
         return 0
+    
 
 async def delete_announcement(announcement_id: int) -> bool:
     async with AsyncSessionLocal() as session:
