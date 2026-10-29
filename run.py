@@ -1,7 +1,9 @@
 import asyncio
+import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import BotCommand
+from aiohttp import web
 from settings import config
 from tables.database import engine, Base
 from app.handlers import router
@@ -31,6 +33,21 @@ async def init_db():
         """))
         print("✅ Таблицы базы данных проверены и созданы")
 
+async def handle_ping(request):
+    return web.Response(text="Bot is running and alive!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    app.router.add_get("/health", handle_ping)
+    
+    port = int(os.environ.get("PORT", 10000))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"🌐 HTTP-сервер успешно запущен на порту {port}")
+
 async def main():
     commands = [
         BotCommand(command="start", description="🚀 Запуск бота"),
@@ -43,6 +60,9 @@ async def main():
     dp.include_router(router)
     await init_db()
     await bot.set_my_commands(commands)
+    
+    await start_web_server()
+    
     print("✅ Бот запущен")
     await dp.start_polling(bot)
 
